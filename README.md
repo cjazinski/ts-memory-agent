@@ -49,6 +49,8 @@ SQLITE_PATH=./data/project-memory.db
 
 Add to your `opencode.json`:
 
+**With SQLite (simple, no extra setup):**
+
 ```json
 {
   "mcp": {
@@ -65,22 +67,61 @@ Add to your `opencode.json`:
 }
 ```
 
-Or use npx (after publishing):
+**With Redis (recommended for production/shared access):**
 
 ```json
 {
   "mcp": {
     "project-memory": {
       "type": "local",
-      "command": ["npx", "ts-memory-agent"],
+      "command": ["node", "/path/to/ts-memory-agent/dist/mcp-server.js"],
       "enabled": true,
       "environment": {
-        "GITHUB_TOKEN": "your-github-token"
+        "GITHUB_TOKEN": "your-github-token",
+        "REDIS_URL": "redis://localhost:6379",
+        "SQLITE_PATH": "/path/to/ts-memory-agent/data/project-memory.db"
       }
     }
   }
 }
 ```
+
+**With Redis (individual settings):**
+
+```json
+{
+  "mcp": {
+    "project-memory": {
+      "type": "local",
+      "command": ["node", "/path/to/ts-memory-agent/dist/mcp-server.js"],
+      "enabled": true,
+      "environment": {
+        "GITHUB_TOKEN": "your-github-token",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379",
+        "REDIS_PASSWORD": "optional-password",
+        "SQLITE_PATH": "/path/to/ts-memory-agent/data/project-memory.db"
+      }
+    }
+  }
+}
+```
+
+### Environment Variables Reference
+
+| Variable          | Required | Description                                                     |
+| ----------------- | -------- | --------------------------------------------------------------- |
+| `GITHUB_TOKEN`    | Yes      | GitHub token with `models:read` permission                      |
+| `EMBEDDING_MODEL` | No       | Model for embeddings (default: `openai/text-embedding-3-small`) |
+| `REDIS_URL`       | No       | Redis connection URL (e.g., `redis://localhost:6379`)           |
+| `REDIS_HOST`      | No       | Redis host (alternative to REDIS_URL)                           |
+| `REDIS_PORT`      | No       | Redis port (default: 6379)                                      |
+| `REDIS_PASSWORD`  | No       | Redis password if required                                      |
+| `SQLITE_PATH`     | No       | SQLite database path (default: `./data/project-memory.db`)      |
+| `OPENAI_API_KEY`  | No       | Fallback if GITHUB_TOKEN not available                          |
+
+> **Note**: If Redis is configured but unavailable, the server automatically
+> falls back to SQLite.
 
 ## MCP Tools
 
