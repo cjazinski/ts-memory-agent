@@ -61,6 +61,48 @@ export class RedisStorage implements MemoryStorage {
       console.error("Redis connection error:", err.message);
       this.connected = false;
     });
+
+    this.redis.on("ready", () => {
+      this.connected = true;
+    });
+  }
+
+  /**
+   * Wait for Redis connection to be established
+   * @param timeoutMs Maximum time to wait in milliseconds
+   * @returns true if connected, false if timeout
+   */
+  async waitForConnection(timeoutMs: number = 3000): Promise<boolean> {
+    // If already connected, return immediately
+    if (this.connected) {
+      return true;
+    }
+
+    // Check if connection is already ready
+    if (this.redis.status === "ready") {
+      this.connected = true;
+      return true;
+    }
+
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        resolve(false);
+      }, timeoutMs);
+
+      const onReady = () => {
+        clearTimeout(timeout);
+        this.connected = true;
+        resolve(true);
+      };
+
+      const onError = () => {
+        clearTimeout(timeout);
+        resolve(false);
+      };
+
+      this.redis.once("ready", onReady);
+      this.redis.once("error", onError);
+    });
   }
 
   private memoryKey(id: string): string {

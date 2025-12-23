@@ -156,10 +156,10 @@ export class ProjectMemory {
 
         const redisStorage = new RedisStorage(redisConfig);
 
-        // Wait a moment for connection
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        // Wait for connection with timeout
+        const isConnected = await redisStorage.waitForConnection(3000);
 
-        if (await redisStorage.isAvailable()) {
+        if (isConnected && (await redisStorage.isAvailable())) {
           console.log(
             `[ProjectMemory] Using Redis storage for project: ${fullConfig.projectId}`,
           );

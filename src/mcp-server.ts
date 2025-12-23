@@ -24,21 +24,27 @@ dotenv.config();
 // Cache project memory instances to avoid re-initializing
 const memoryCache = new Map<string, ProjectMemory>();
 
+// Shared configuration builder
+function getMemoryConfig() {
+  return {
+    githubToken: process.env.GITHUB_TOKEN || process.env.GITHUB_MODELS_TOKEN,
+    embeddingModel:
+      process.env.EMBEDDING_MODEL || "openai/text-embedding-3-small",
+    openaiApiKey: process.env.OPENAI_API_KEY,
+    redisUrl: process.env.REDIS_URL,
+    redisHost: process.env.REDIS_HOST,
+    redisPort: process.env.REDIS_PORT
+      ? parseInt(process.env.REDIS_PORT)
+      : undefined,
+    redisPassword: process.env.REDIS_PASSWORD,
+    redisDb: process.env.REDIS_DB ? parseInt(process.env.REDIS_DB) : undefined,
+    sqlitePath: process.env.SQLITE_PATH || "./data/project-memory.db",
+  };
+}
+
 async function getProjectMemory(projectId: string): Promise<ProjectMemory> {
   if (!memoryCache.has(projectId)) {
-    const memory = await createProjectMemory(projectId, {
-      githubToken: process.env.GITHUB_TOKEN || process.env.GITHUB_MODELS_TOKEN,
-      embeddingModel:
-        process.env.EMBEDDING_MODEL || "openai/text-embedding-3-small",
-      openaiApiKey: process.env.OPENAI_API_KEY,
-      redisUrl: process.env.REDIS_URL,
-      redisHost: process.env.REDIS_HOST,
-      redisPort: process.env.REDIS_PORT
-        ? parseInt(process.env.REDIS_PORT)
-        : undefined,
-      redisPassword: process.env.REDIS_PASSWORD,
-      sqlitePath: process.env.SQLITE_PATH || "./data/project-memory.db",
-    });
+    const memory = await createProjectMemory(projectId, getMemoryConfig());
     memoryCache.set(projectId, memory);
   }
   return memoryCache.get(projectId)!;
@@ -387,11 +393,68 @@ server.tool(
   },
 );
 
+// Test storage connection and return actual status
+async function testStorageConnection(): Promise<{
+  storageType: "redis" | "sqlite";
+  storageLocation: string;
+  embeddingProvider: "github-models" | "openai" | "none";
+}> {
+  // Create a temporary memory instance to test the connection
+  const testMemory = await createProjectMemory(
+    "__connection_test__",
+    getMemoryConfig(),
+  );
+
+  const storageType = testMemory.getStorageType();
+  const embeddingProvider = testMemory.getEmbeddingProvider();
+
+  let storageLocation: string;
+  if (storageType === "redis") {
+    const db = process.env.REDIS_DB ? `:db${process.env.REDIS_DB}` : "";
+    storageLocation =
+      process.env.REDIS_URL ||
+      `${process.env.REDIS_HOST}:${process.env.REDIS_PORT || 6379}${db}`;
+  } else {
+    storageLocation = process.env.SQLITE_PATH || "./data/project-memory.db";
+  }
+
+  // Clean up test instance
+  await testMemory.close();
+
+  return { storageType, storageLocation, embeddingProvider };
+}
+
 // Start the server
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
+
   console.error("Project Memory MCP Server running on stdio");
+
+  // Test actual connection and report status
+  try {
+    const { storageType, storageLocation, embeddingProvider } =
+      await testStorageConnection();
+
+    const storageStatus =
+      storageType === "redis"
+        ? `Connected to Redis (${storageLocation})`
+        : `Using SQLite (${storageLocation})`;
+
+    const embeddingStatus =
+      embeddingProvider === "github-models"
+        ? "GitHub Models"
+        : embeddingProvider === "openai"
+          ? "OpenAI"
+          : "disabled";
+
+    console.error(`Storage: ${storageStatus}`);
+    console.error(`Embeddings: ${embeddingStatus}`);
+  } catch (error) {
+    console.error(
+      `Storage connection test failed: ${(error as Error).message}`,
+    );
+  }
 }
 
 main().catch((error) => {
